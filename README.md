@@ -19,6 +19,8 @@ Tests: `npm test` (logic, no network) and `npm run test:db` (spins up a throwawa
 | Join gateway, rotating code, heartbeat, random checks, open/close window, override, device approval | `app/api/sessions`, `app/api/devices` | Written, not run against a live stack |
 | STK push, Daraja callback (secret path, intent/amount/phone match, STK query, unique receipt), reconcile job | `app/api/payments`, `app/api/daraja`, `app/api/jobs` | Written; callback logic unit-tested |
 | Student dashboard (join, pay, live checks), teacher session controls with live code, school overview, audit viewer | `app/(student|teacher|school|system)` | Written, not rendered |
+| Invitation links, join-request approval queue, free-access grants (reason required, late payment system-admin only) | `10_onboarding.sql`, `app/api/invitations`, `app/(public)/join`, `app/(teacher)/approvals`, `app/api/exemptions` | Database side tested (19 checks); pages written, not rendered |
+| Attendance CSV export (audited, formula-safe), new-session form | `app/api/reports/attendance`, `lib/reports/csv.ts`, `app/(teacher)/sessions/new` | CSV logic tested; routes not run |
 | PWA manifest, service worker, design tokens | `app/manifest.ts`, `public/sw.js`, `app/globals.css` | Written |
 
 ## Not built yet (MVP list in PRD section 2)

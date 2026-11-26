@@ -13,7 +13,7 @@ export default async function TeacherSessions() {
   const { data: sessions } = await sb.from("sessions").select("id, title, starts_at, ends_at, status").gte("ends_at", from).lte("starts_at", to).order("starts_at");
   return (
     <>
-      <h1>Sessions</h1>
+      <div className="row"><h1>Sessions</h1><a className="btn" href="/sessions/new">New session</a></div>
       {(sessions ?? []).length === 0 && <p className="card muted">No sessions in the next week.</p>}
       {(sessions ?? []).map((s) => (
         <section className="card" key={s.id}>
