@@ -13,13 +13,18 @@ begin
   perform public.rpc_create_invitation(teacher, cls, h, 7);
   perform t.ok(true, 'class teacher creates an invitation');
 
+  -- redeem needs a profile and consent; the fixture's profile for 06 is a minor, so guardian consent is required too
+  ok := false; begin perform public.rpc_redeem_invitation(newbie, h); exception when invalid_parameter_value then ok := true; end;
+  perform t.ok(ok, 'redeeming without consent is refused');
+  perform public.rpc_record_consent(newbie, 'a0000000-0000-0000-0000-000000000001', 'terms', 'v1');
+  perform public.rpc_record_consent(newbie, 'a0000000-0000-0000-0000-000000000001', 'guardian', 'v1');
   -- redeem: creates a REQUEST only, never an approved enrolment
   enr := public.rpc_redeem_invitation(newbie, h);
   perform t.ok(enr is not null, 'valid link creates an enrolment request');
   perform t.ok((select status from public.enrollments where id = enr) = 'requested', 'request starts unapproved');
   perform t.ok(public.rpc_redeem_invitation(newbie, extensions.digest('nope', 'sha256')) is null, 'unknown link rejected');
   update private.invitations set expires_at = now() - interval '1 minute' where token_hash = h;
-  perform t.ok(public.rpc_redeem_invitation('00000000-0000-0000-0000-000000000009', h) is null, 'expired link rejected');
+  perform t.ok(public.rpc_redeem_invitation('00000000-0000-0000-0000-000000000009', h) is null, 'expired link rejected (checked before consent)');
 
   -- an unapproved student still cannot join
   perform t.ok(public.rpc_check_join(newbie, '50000000-0000-0000-0000-000000000001') = 'not_enrolled', 'requested student cannot join');

@@ -1,9 +1,9 @@
-import { requireMe, hasRole } from "@/lib/auth";
+import { requireAdminMfa, hasRole } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export default async function Overview() {
-  const me = await requireMe();
+  const me = await requireAdminMfa();
   if (!hasRole(me, "school_admin", "system_admin")) redirect("/dashboard");
   const sb = await supabaseServer();
   const [{ count: students }, { data: pays }, { data: recs }] = await Promise.all([

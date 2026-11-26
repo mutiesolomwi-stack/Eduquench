@@ -3,6 +3,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { PayButton } from "./pay-button";
 import { LiveCheck } from "./live-check";
+import { PushSetup } from "./push-setup";
+import { ClaimForm } from "./claim-form";
 
 const REASONS: Record<string, string> = {
   not_enrolled: "You are not enrolled in this class yet.", no_entitlement: "Payment is needed before you can join.",
@@ -25,6 +27,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     sb.from("classes").select("id, name"),
   ]);
   const name = new Map((classes ?? []).map((c) => [c.id, c.name]));
+  const recIds = (records ?? []).map((r) => r.session_id);
+  const { data: past } = recIds.length ? await sb.from("sessions").select("id, title, starts_at, ends_at").in("id", recIds) : { data: [] };
+  const pastBy = new Map((past ?? []).map((p) => [p.id, p]));
   const total = records?.length ?? 0;
   const attended = (records ?? []).filter((r) => ["verified_present", "late", "left_early", "excused"].includes(r.effective_status)).length;
   const pct = total ? Math.round((attended / total) * 100) : null;
@@ -33,6 +38,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     <>
       <h1>My classes</h1>
       {join_error && <p className="card err" role="alert">{REASONS[join_error] ?? "You can't join this session right now."}</p>}
+      <PushSetup />
       <LiveCheck sessionIds={(sessions ?? []).filter((s) => s.status === "live").map((s) => s.id)} />
       <section className="card"><div className="row"><h2>Attendance</h2><strong>{pct === null ? "No sessions yet" : `${pct}% overall`}</strong></div></section>
       <section aria-label="Upcoming sessions">
@@ -55,9 +61,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         ))}
       </section>
       <section aria-label="History"><h2>History</h2>
-        <div className="card"><table><thead><tr><th>Session</th><th>Status</th></tr></thead><tbody>
-          {(records ?? []).slice(0, 20).map((r) => <tr key={r.session_id}><td>{r.session_id.slice(0, 8)}</td><td><StatusBadge status={r.effective_status} /></td></tr>)}
-        </tbody></table></div>
+        {(records ?? []).length === 0 && <p className="card muted">No attendance records yet.</p>}
+        {(records ?? []).slice(0, 20).map((r) => { const p = pastBy.get(r.session_id); const recent = p && Date.now() - Date.parse(p.ends_at) < 7 * 86400_000;
+          return (<div className="card" key={r.session_id}><div className="row"><div><strong>{p?.title ?? "Session"}</strong><div className="muted">{p ? eat.format(new Date(p.starts_at)) : ""}</div></div><StatusBadge status={r.effective_status} /></div>
+            {recent && ["absent", "partial", "late", "left_early"].includes(r.effective_status) && <ClaimForm sessionId={r.session_id} />}</div>); })}
       </section>
     </>
   );

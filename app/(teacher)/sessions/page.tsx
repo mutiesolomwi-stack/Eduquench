@@ -1,4 +1,4 @@
-import { requireMe, hasRole } from "@/lib/auth";
+import { requireAdminMfa, hasRole } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { SessionControls } from "./controls";
@@ -6,7 +6,7 @@ import { SessionControls } from "./controls";
 const eat = new Intl.DateTimeFormat("en-KE", { timeZone: "Africa/Nairobi", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export default async function TeacherSessions() {
-  const me = await requireMe();
+  const me = await requireAdminMfa();
   if (!hasRole(me, "teacher", "assistant", "school_admin", "system_admin")) redirect("/dashboard");
   const sb = await supabaseServer();
   const from = new Date(Date.now() - 6 * 3600_000).toISOString(), to = new Date(Date.now() + 7 * 86400_000).toISOString();

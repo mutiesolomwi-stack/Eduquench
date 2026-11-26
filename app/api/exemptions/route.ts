@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getMe } from "@/lib/auth";
+import { getMe, mfaBlocked } from "@/lib/auth";
 import { admin } from "@/lib/supabase/admin";
 
 /** Free access with a mandatory reason. School admin or system admin only; late-payment grants need the system admin. */
 export async function POST(req: NextRequest) {
   const me = await getMe();
+  if (me && mfaBlocked(me)) return NextResponse.json({ error: "mfa_required" }, { status: 403 });
   const b = z.object({
     classId: z.string().uuid(), studentId: z.string().uuid(), reason: z.string().trim().min(3).max(500),
     kind: z.enum(["scholarship", "staff", "trial", "sponsored", "late_payment"]), days: z.number().int().min(1).max(366).nullable().default(null),

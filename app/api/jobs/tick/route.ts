@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { admin } from "@/lib/supabase/admin";
 import { authorisedJob, denied } from "@/lib/jobs";
+import { notifyMany } from "@/lib/notify/send";
+import { processOutbox, type OutboxRow } from "@/lib/notify/outbox";
+import { sendRow } from "@/lib/notify/providers";
 
 /** Minute tick: dispatch due checks, expire missed ones, close windows past session end + grace. */
 export async function GET(req: NextRequest) {
@@ -11,7 +14,10 @@ export async function GET(req: NextRequest) {
   const { data: due } = await sb.from("challenges").update({ sent_at: now }).is("sent_at", null).lte("due_at", now).select("id, session_id, enrollment_id, org_id");
   for (const c of due ?? []) {
     const { data: e } = await sb.from("enrollments").select("student_id").eq("id", c.enrollment_id).single();
-    if (e) await sb.rpc("rpc_record_event", { p_session: c.session_id, p_student: e.student_id, p_type: "challenge_sent", p_meta: { challenge: c.id } });
+    if (e) {
+      await sb.rpc("rpc_record_event", { p_session: c.session_id, p_student: e.student_id, p_type: "challenge_sent", p_meta: { challenge: c.id } });
+      await notifyMany([e.student_id], { org: c.org_id, kind: "attendance.check", title: "Quick check", body: "Are you still in class? Open Eduquench and tap I'm here.", channels: ["push"], dedupe: () => `chk:${c.id}` });
+    }
   }
 
   // 2. Expire unanswered checks. A missed check is retried ONCE if the student has been heard from since it was due.
@@ -45,5 +51,22 @@ export async function GET(req: NextRequest) {
       p_entity_id: w.session_id, p_old: null, p_new: { computed: enrs?.length ?? 0 }, p_reason: null, p_source: "job" });
     closed++;
   }
-  return NextResponse.json({ dispatched: due?.length ?? 0, missed, retried, closed });
+  // 4. Reminders: sessions starting within 15 minutes (one per student per session, thanks to the dedupe key).
+  const soon = new Date(Date.now() + 15 * 60_000).toISOString();
+  const { data: upcoming } = await sb.from("sessions").select("id, org_id, class_id, title").eq("status", "scheduled").gte("starts_at", now).lte("starts_at", soon);
+  for (const u of upcoming ?? []) {
+    const { data: enrs } = await sb.from("enrollments").select("student_id").eq("class_id", u.class_id).eq("status", "approved");
+    await notifyMany((enrs ?? []).map((e) => e.student_id), { org: u.org_id, kind: "session.reminder", title: "Class starting soon", body: `"${u.title}" starts in about 15 minutes.`, channels: ["push"], dedupe: (id) => `remind:${u.id}:${id}` });
+  }
+
+  // 5. Deliver queued email and push; failures back off and are finally recorded. A backlog is logged for alerting.
+  const delivery = await processOutbox({
+    claim: async (n) => ((await sb.rpc("rpc_claim_outbox", { p_limit: n })).data ?? []) as OutboxRow[],
+    send: sendRow,
+    report: async (id, sent, permanent, retry, error) => { await sb.rpc("rpc_outbox_result", { p_id: id, p_sent: sent, p_permanent: permanent, p_retry_seconds: retry, p_error: error }); },
+    dropEndpoint: async (endpoint) => { await sb.rpc("rpc_drop_push_endpoint", { p_endpoint: endpoint }); },
+  }, 100);
+  const { data: backlog } = await sb.rpc("rpc_outbox_backlog");
+  if (Number(backlog) > 0) console.error("OUTBOX BACKLOG older than 10 minutes:", backlog);
+  return NextResponse.json({ dispatched: due?.length ?? 0, missed, retried, closed, delivery });
 }

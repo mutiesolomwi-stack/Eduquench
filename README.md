@@ -12,19 +12,32 @@ npm run dev
 Tests: `npm test` (logic, no network) and `npm run test:db` (spins up a throwaway Postgres, applies the schema, runs policy tests).
 
 ## What exists
-| Area | Where | Status |
+| Area | Where | Verified how |
 | --- | --- | --- |
-| Schema, RLS, hash-chained audit log, `compute_attendance`, `confirm_payment` | `supabase/schemas/01-09` | Built, 4 test files pass on Postgres 16 |
-| Meeting links hidden from the Data API (column privileges), single-use join tokens, device binding | `09_gateway_and_rpc.sql` | Built and tested |
-| Join gateway, rotating code, heartbeat, random checks, open/close window, override, device approval | `app/api/sessions`, `app/api/devices` | Written, not run against a live stack |
-| STK push, Daraja callback (secret path, intent/amount/phone match, STK query, unique receipt), reconcile job | `app/api/payments`, `app/api/daraja`, `app/api/jobs` | Written; callback logic unit-tested |
-| Student dashboard (join, pay, live checks), teacher session controls with live code, school overview, audit viewer | `app/(student|teacher|school|system)` | Written, not rendered |
-| Invitation links, join-request approval queue, free-access grants (reason required, late payment system-admin only) | `10_onboarding.sql`, `app/api/invitations`, `app/(public)/join`, `app/(teacher)/approvals`, `app/api/exemptions` | Database side tested (19 checks); pages written, not rendered |
-| Attendance CSV export (audited, formula-safe), new-session form | `app/api/reports/attendance`, `lib/reports/csv.ts`, `app/(teacher)/sessions/new` | CSV logic tested; routes not run |
-| PWA manifest, service worker, design tokens | `app/manifest.ts`, `public/sw.js`, `app/globals.css` | Written |
+| Schema, row-level security, hash-chained audit log, `compute_attendance`, `confirm_payment` | `supabase/schemas/01-09` | Postgres 16 tests (`npm run test:db`) |
+| Meeting links hidden from the Data API, single-use join tokens, device binding and approval | `09_gateway_and_rpc.sql` | Postgres tests |
+| Invitations, join-request approval, free-access grants (reason required; late payment system-admin only) | `10_onboarding.sql` | Postgres tests |
+| Sign-up profile rules, guardian consent at enrolment, notification outbox with retries, connection-problem claims, access-link and code redemption, class / fee plan / holiday / timetable setup (skips holidays, EAT, idempotent), session cancel | `11_mvp_additions.sql` | Postgres tests (50+ checks) |
+| Rotating code, challenge planner, Daraja callback checks, credentials, outbox retry rules, CSV, six report builders, PDF, admin-MFA rule | `lib/` | `npm test` (41 tests, no network) |
+| Join gateway, code, heartbeat, checks, window open/close, override, devices, claims, invitations, exemptions, STK push and callback, reports (CSV and PDF), push subscribe, jobs | `app/api/` | Written; exercised by the Playwright specs, **not yet run** |
+| Pages: sign-up, sign-in, join link with consent, student dashboard (join, pay, live code and checks, claims, push set-up), notifications, access link + QR, access code, classes, class setup (fees, timetable, join link, reports), approvals, reviews (claims and devices), reports, school overview, audit viewer, admin MFA | `app/` | Written, **not yet rendered** |
+| End-to-end flows: payment and join, attendance and override, onboarding, security | `tests/e2e/`, `supabase/seed.sql` | Seed validated on Postgres; specs syntax-checked, **not yet run** |
 
-## Not built yet (MVP list in PRD section 2)
-Sign-up, invitation links and approval queue; class/session/timetable creation screens; fee-plan setup screens; access-link/QR redemption page; CSV and PDF reports; email and in-app notification delivery worker (outbox); Web Push sending; Realtime Broadcast (polling works now); teacher review queue UI for claims and devices (APIs exist); MFA for admins; Playwright flows; CI; the `audit-digests` storage bucket.
+## Run the browser tests
+```bash
+supabase start && supabase db reset      # loads supabase/seed.sql (test accounts, password Passw0rd!test)
+npx playwright install chromium
+npm run e2e
+```
+Set `DARAJA_CALLBACK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` and the public Supabase variables in `.env.local` first. The flows never call Daraja: they post the callback themselves.
+
+## Still not built
+Phone number one-time-code verification (needs the SMS provider decision, PRD question 6); the pasted M-Pesa SMS lookup screen (the parsing helper exists); student-facing device-change request screen (a new browser is registered as pending automatically and shows in the teacher's Reviews); bulk CSV student upload; Google Meet link creation through the teacher's account (links are pasted); Realtime Broadcast (polling every 10 s works now); parent portal, chat, certificates, refunds, SMS and WhatsApp, Excel export and analytics are Phase 2 by design.
+
+## Known trade-offs
+- The access code and link appear in the beneficiary's own notification and email so they can be used; the database stores only their hashes. Joining still needs the student's own login and registered device.
+- Per-student rate-limit counters are per server instance. Put Vercel Firewall rules in front of sign-in, join, code entry and payment endpoints.
+- Dependencies `qrcode`, `web-push`, `pdf-lib` and `@playwright/test` were added to `package.json`; only `pdf-lib` was exercised here.
 
 ## Before go-live
 Apply for Safaricom go-live now. Confirm the Safaricom IP list in `lib/payments/daraja.ts`. Put the Vercel Firewall rate limits in front of sign-in, join and code entry (the in-code counters are per-instance only). Lawyer review of consent and cross-border storage (PRD section 14).

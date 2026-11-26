@@ -1,9 +1,9 @@
-import { requireMe, hasRole } from "@/lib/auth";
+import { requireAdminMfa, hasRole } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export default async function AuditViewer() {
-  const me = await requireMe();
+  const me = await requireAdminMfa();
   if (!hasRole(me, "system_admin", "school_admin")) redirect("/dashboard");
   const sb = await supabaseServer();
   const { data } = await sb.from("audit_log_view").select("id, action, entity, entity_id, reason, source, created_at").order("id", { ascending: false }).limit(100);

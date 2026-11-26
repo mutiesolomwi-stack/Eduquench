@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getMe } from "@/lib/auth";
+import { getMe, mfaBlocked } from "@/lib/auth";
 import { admin } from "@/lib/supabase/admin";
 import { deviceState } from "@/lib/device";
 import { currentCode, matchRound } from "@/lib/attendance/rotating-code";
@@ -10,6 +10,7 @@ import { isSessionStaff, loadSession, tooMany, windowIsOpen } from "@/lib/access
 export async function GET(_: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const me = await getMe(); const s = await loadSession(id);
+  if (me && mfaBlocked(me)) return NextResponse.json({ error: "mfa_required" }, { status: 403 });
   if (!me || !s || !(await isSessionStaff(me, s))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const { data: secret } = await admin().rpc("rpc_session_secret", { p_session: id });
   return NextResponse.json(currentCode(String(secret)), { headers: { "Cache-Control": "no-store" } });

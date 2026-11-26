@@ -164,8 +164,8 @@ begin
     if v_left is null and now() < s.ends_at then v_early_m := 0; end if;  -- still in the lesson
   end if;
 
-  if v_first is null then v_status := 'absent';
-  elsif v_pending then v_status := 'pending_review';
+  if v_pending then v_status := 'pending_review';          -- an open connection claim waits for the teacher, even with no evidence
+  elsif v_first is null then v_status := 'absent';
   elsif v_late_m > v_late then v_status := 'late';
   elsif v_left is not null and v_early_m > v_early then v_status := 'left_early';
   elsif v_secs / nullif(v_dur, 0) * 100 >= v_min_pct and v_passed >= v_required then v_status := 'verified_present';

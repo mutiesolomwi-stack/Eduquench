@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PROTECTED = ["/dashboard", "/sessions", "/approvals", "/overview", "/audit"];
+const PROTECTED = ["/dashboard", "/sessions", "/approvals", "/overview", "/audit", "/classes", "/reviews", "/reports", "/notifications", "/access", "/security"];
 
 /** Next.js 16 proxy: refresh the session and keep signed-out visitors out of role areas.
  *  This is a convenience filter only; every page and handler re-checks, and row-level security is the real wall. */

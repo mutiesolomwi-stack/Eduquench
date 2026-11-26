@@ -50,10 +50,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ secret: st
   });
   if (error || !entitlement) return NextResponse.json(ACK); // null = replayed receipt: nothing to do
 
-  // Receipt and access pack: plaintext link and code exist only here, in the notification, and are never stored hashed-and-plain together.
-  await sb.from("notifications").insert({
-    org_id: intent.org_id, user_id: intent.payer_id, kind: "payment.receipt", critical: true,
-    title: "Payment received", body: `M-Pesa ${cb.receipt}. Access code ${code}. Open ${process.env.APP_URL}/dashboard to join your classes.`,
-  });
+  // Receipt for the payer; access pack (link and code) for the beneficiary. The plaintext exists only here and in the
+  // beneficiary's own notification: the database keeps hashes. Delivery goes through the retrying outbox.
+  const intentFull = intentRaw as unknown as { beneficiary_id: string };
+  const same = intentFull.beneficiary_id === intent.payer_id;
+  const pack = `Access code ${code}. Open ${process.env.APP_URL}/access/${linkToken} to see your QR code.`;
+  await sb.rpc("rpc_notify", { p_user: intent.payer_id, p_org: intent.org_id, p_kind: "payment.receipt", p_title: "Payment received",
+    p_body: `M-Pesa receipt ${cb.receipt}, KES ${cb.amount}. ${same ? pack : "The student has been sent their own access pack."}`, p_critical: true, p_channels: ["email", "push"], p_dedupe: `rcpt:${cb.receipt}` });
+  if (!same) await sb.rpc("rpc_notify", { p_user: intentFull.beneficiary_id, p_org: intent.org_id, p_kind: "access.pack", p_title: "Your class access is ready",
+    p_body: pack, p_critical: true, p_channels: ["email", "push"], p_dedupe: `pack:${cb.receipt}` });
   return NextResponse.json(ACK);
 }
