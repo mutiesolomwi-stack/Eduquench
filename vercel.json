@@ -1,8 +1,15 @@
 {
-  "regions": ["cpt1"],
-  "crons": [
-    { "path": "/api/jobs/tick", "schedule": "* * * * *" },
-    { "path": "/api/jobs/payments-reconcile", "schedule": "*/5 * * * *" },
-    { "path": "/api/jobs/daily", "schedule": "0 1 * * *" }
-  ]
+    "regions":  [
+                    "cpt1"
+                ],
+    "crons":  [
+                  {
+                      "path":  "/api/jobs/tick",
+                      "schedule":  "0 0 * * *"
+                  },
+                  {
+                      "path":  "/api/jobs/payments-reconcile",
+                      "schedule":  "0 0 * * *"
+                  }
+              ]
 }
